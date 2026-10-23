@@ -30,9 +30,8 @@ def run_batch(client, table, template, dry_run=False):
                     type_=param.creo_type,
                 )
             client.regenerate(model_name)
-            # TODO: 把再生后的模型另存为 row.output_filename，并且不覆盖模板。
-            # creopyson 没有 save_as。下一步再看 file_backup 或 file_rename。
-            # 在那之前不要调用 client.save()。
+            # 命令行这条路径仍然不保存，避免上课时覆盖模板。
+            # 另存为新零件在 MCP 工具 batch_from_csv 里：内存改名后再 file_save。
     finally:
         # 无论中间是否出错，都尝试断开，免得占着会话。
         client.disconnect()

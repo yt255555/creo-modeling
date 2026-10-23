@@ -84,3 +84,64 @@ def test_call_before_connect_fails():
     client = CreosonClient()
     with pytest.raises(CreosonError, match="还没有连接"):
         client.open_model("shaft.prt")
+
+
+def test_list_and_parameter_calls(monkeypatch):
+    """这些名字对照已安装的 creopyson 0.7.8。"""
+    client, _fake_module, raw = _connect(monkeypatch)
+    client.working_directory()
+    client.set_working_directory(r"D:\lab")
+    client.list_workdir_files("*.prt")
+    client.list_open_files()
+    client.list_parameters(name="D", file_="shaft.prt")
+    client.list_dimensions(file_="shaft.prt")
+    client.set_dimension("d0", 20.0, file_="shaft.prt")
+    client.set_creo_version(12)
+    raw.creo_pwd.assert_called_once_with()
+    raw.creo_cd.assert_called_once_with(r"D:\lab")
+    raw.creo_list_files.assert_called_once_with(filename="*.prt")
+    raw.file_list.assert_called_once_with(file_=None)
+    raw.parameter_list.assert_called_once_with(name="D", file_="shaft.prt")
+    raw.dimension_list.assert_called_once_with(
+        name=None, file_="shaft.prt", select=False
+    )
+    raw.dimension_set.assert_called_once_with("d0", 20.0, file_="shaft.prt")
+    raw.creo_set_creo_version.assert_called_once_with(12)
+
+
+def test_save_as_copy_renames_in_session_then_saves(monkeypatch):
+    client, _fake_module, raw = _connect(monkeypatch)
+    raw.file_rename.return_value = "shaft_20x80.prt"
+    saved = client.save_as_copy("shaft_20x80.prt", file_="shaft.prt")
+    assert saved == "shaft_20x80.prt"
+    raw.file_rename.assert_called_once_with(
+        "shaft_20x80.prt", file_="shaft.prt", onlysession=True
+    )
+    raw.file_save.assert_called_once_with(file_="shaft_20x80.prt")
+
+
+def test_export_step_and_pdf(monkeypatch):
+    client, _fake_module, raw = _connect(monkeypatch)
+    client.export_step(file_="shaft.prt", filename="shaft.stp", dirname=r"D:\out")
+    client.export_pdf(file_="shaft.drw", filename="shaft.pdf")
+    raw.interface_export_file.assert_called_once_with(
+        "STEP",
+        file_="shaft.prt",
+        filename="shaft.stp",
+        dirname=r"D:\out",
+        geom_flags="solids",
+    )
+    raw.interface_export_pdf.assert_called_once_with(
+        file_="shaft.drw",
+        filename="shaft.pdf",
+        dirname=None,
+    )
+
+
+def test_start_creo_requires_the_creoson_bat_name(monkeypatch):
+    client, _fake_module, raw = _connect(monkeypatch)
+    with pytest.raises(CreosonError, match="nitro_proe_remote.bat"):
+        client.start_creo(r"C:\CREOSON\parametric.bat")
+    raw.start_creo.assert_not_called()
+    client.start_creo(r"C:\CREOSON\nitro_proe_remote.bat")
+    raw.start_creo.assert_called_once_with(r"C:\CREOSON\nitro_proe_remote.bat")

@@ -6,18 +6,18 @@
 下面这些名字对照官方文档，没有猜测：
 https://creopyson.readthedocs.io/en/latest/creopyson.html
 
-已封装：
-- creopyson.Client(ip_adress=..., port=9056) 然后 connect() / disconnect()
-- file_open(file_, dirname=None, display=..., activate=...)
-- parameter_set(name, value=..., file_=..., type_=..., no_create=...)
-- file_regenerate(file_=..., display=...)
-- file_save(file_=...)
-
-以后再接（现在不要调用，避免误改模型）：
-- is_creo_running()
+已封装（名字对照 creopyson 0.7.8，没有猜测）：
+- creopyson.Client(ip_adress=..., port=9056)、connect()、disconnect()、is_creo_running()
 - start_creo(path)  启动文件必须叫 nitro_proe_remote.bat
-- file_backup(target_dir, file_=...)  把模型复制到另一个文件夹
-- file_rename(new_name, file_=..., onlysession=...)
+- creo_pwd()、creo_cd(dirname)、creo_list_files(filename=None)、creo_set_creo_version(version)
+- file_open、file_list（当前会话里打开的文件）、file_get_active
+- parameter_list、parameter_set（no_create=True）
+- dimension_list（select=False）、dimension_set(name, value, file_=...)
+- file_regenerate、file_save
+- file_rename(..., onlysession=True) 再 file_save：另存为新名字，原文件留在磁盘上
+- interface_export_file("STEP", ...) 与 interface_export_pdf(...)
+
+不封装会删文件的函数：file_erase、file_erase_not_displayed、creo_delete_files、creo_rmdir。
 """
 
 from pathlib import Path
@@ -76,15 +76,24 @@ class CreosonClient:
         import creopyson
 
         # 参数名是 ip_adress，少了一个 d。这是 creopyson 源码里的拼写，不能改成 address。
-        self._client = creopyson.Client(ip_adress=self.host, port=self.port)
-        self._client.connect()
+        # 连接成功以后才记下对象。失败时 _client 仍是空的，避免半连接。
+        raw = creopyson.Client(ip_adress=self.host, port=self.port)
+        raw.connect()
+        self._client = raw
 
     def disconnect(self):
         """断开连接。还没连接时再调用也没关系。"""
-        if self._client is None:
-            return
-        self._client.disconnect()
+        # 下次重新连上后，要再告诉 CREOSON 一次 Creo 版本。
+        self._creo_version_sent = False
+        raw = self._client
         self._client = None
+        if raw is None:
+            return
+        try:
+            raw.disconnect()
+        except ConnectionError:
+            # 服务器已经关掉时，断开请求也会失败。这时连接本来就已经没了。
+            return
 
     def _require(self):
         if self._client is None:
@@ -127,10 +136,90 @@ class CreosonClient:
         client.file_regenerate(file_=file_, display=False)
 
     def save(self, file_=None):
-        """保存当前模型（file_save）。
-
-        这会写回打开的那个文件。批量生成时如果直接保存，会覆盖模板。
-        在想好「另存为」之前，batch 流程不要调用本方法。
-        """
+        """保存当前模型（file_save）。会覆盖磁盘上的同名文件。"""
         client = self._require()
         client.file_save(file_=file_)
+
+    def is_creo_running(self):
+        """问 CREOSON：Creo 现在是否开着。必须先 connect()。"""
+        return self._require().is_creo_running()
+
+    def set_creo_version(self, version):
+        """告诉 CREOSON 当前是哪一版 Creo。Creo 7 及以后，再生前需要这一步。
+
+        creopyson 0.7.8 的说明文字还写着只支持 7、8、9，函数本身只把整数发出去。
+        本机是 Creo 12，由调用方传入 12。
+        """
+        self._require().creo_set_creo_version(int(version))
+
+    def start_creo(self, bat_path):
+        """用 CREOSON 启动 Creo。bat_path 的文件名必须是 nitro_proe_remote.bat。"""
+        leaf = str(bat_path).replace("\\", "/").rstrip("/").split("/")[-1]
+        if leaf.lower() != "nitro_proe_remote.bat":
+            raise CreosonError(
+                "启动文件的名字必须是 nitro_proe_remote.bat。这是 CREOSON 的规定。"
+            )
+        self._require().start_creo(bat_path)
+
+    def working_directory(self):
+        """Creo 当前工作目录（creo_pwd）。"""
+        return self._require().creo_pwd()
+
+    def set_working_directory(self, dirname):
+        """切换 Creo 工作目录（creo_cd）。返回新的目录。"""
+        return self._require().creo_cd(dirname)
+
+    def list_workdir_files(self, filename=None):
+        """列出工作目录里的文件（creo_list_files），不是内存里打开的模型。"""
+        return self._require().creo_list_files(filename=filename)
+
+    def list_open_files(self, file_=None):
+        """列出当前 Creo 会话里打开的模型（file_list）。"""
+        return self._require().file_list(file_=file_)
+
+    def active_model(self):
+        """当前活动模型。返回值含 file 和 dirname。"""
+        return self._require().file_get_active()
+
+    def list_parameters(self, name=None, file_=None):
+        """列出参数（parameter_list）。name 为空时列出全部。"""
+        return self._require().parameter_list(name=name, file_=file_)
+
+    def list_dimensions(self, name=None, file_=None):
+        """列出尺寸（dimension_list）。select=False，不去改动 Creo 里的选择。"""
+        return self._require().dimension_list(name=name, file_=file_, select=False)
+
+    def set_dimension(self, name, value, file_=None):
+        """修改一个尺寸的数值（dimension_set）。参数顺序是名字、数值、文件。"""
+        self._require().dimension_set(name, value, file_=file_)
+
+    def save_as_copy(self, new_name, file_=None):
+        """另存为新文件名，磁盘上的原文件保留。
+
+        creopyson 没有 save_as。按文档分两步：
+        1. file_rename(new_name, onlysession=True) 只改内存中的名字
+        2. file_save(新名字) 把改名后的模型写到磁盘
+        """
+        raw = self._require()
+        renamed = raw.file_rename(new_name, file_=file_, onlysession=True)
+        target = renamed if isinstance(renamed, str) and renamed else new_name
+        raw.file_save(file_=target)
+        return target
+
+    def export_step(self, file_=None, filename=None, dirname=None):
+        """导出 STEP（interface_export_file，类型 STEP，几何为 solids）。"""
+        return self._require().interface_export_file(
+            "STEP",
+            file_=file_,
+            filename=filename,
+            dirname=dirname,
+            geom_flags="solids",
+        )
+
+    def export_pdf(self, file_=None, filename=None, dirname=None):
+        """导出 PDF（interface_export_pdf）。工程图用这个；零件更适合 STEP。"""
+        return self._require().interface_export_pdf(
+            file_=file_,
+            filename=filename,
+            dirname=dirname,
+        )

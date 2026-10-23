@@ -6,12 +6,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "creo-modeling"
-version = "0.1.0"
-description = "用 CREOSON 按参数表批量生成 Creo 零件变体（当前是框架）"
+version = "0.2.0"
+description = "让 AI 通过 MCP 和 CREOSON 操作 Creo，并按参数表生成零件变体"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "creopyson>=0.7.8",
+    "mcp>=2.3,<3",
 ]
 
 [project.optional-dependencies]

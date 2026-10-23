@@ -1,3 +1,4 @@
 # 运行本项目需要的第三方库。
 # creopyson 是 CREOSON 的 Python 客户端，版本号对照 PyPI 上的 0.7.8。
 creopyson>=0.7.8
+mcp>=2.3,<3
