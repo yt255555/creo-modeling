@@ -1,0 +1,30 @@
+# pip 会读这个文件，从而知道项目叫什么、代码在哪、要顺便安装哪些库。
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "creo-modeling"
+version = "0.1.0"
+description = "用 CREOSON 按参数表批量生成 Creo 零件变体（当前是框架）"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "creopyson>=0.7.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[project.scripts]
+creo-modeling = "creo_modeling.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

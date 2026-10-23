@@ -1,0 +1,36 @@
+# Python 运行时产生的缓存和打包文件
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+
+# 编辑器自己的配置
+.idea/
+.vscode/
+
+# Creo 每保存一次就多一个带数字的版本，例如 shaft.prt.1、shaft.prt.2
+# 模板本身（shaft.prt）不会被忽略
+*.prt.[0-9]*
+*.asm.[0-9]*
+*.drw.[0-9]*
+*.sec.[0-9]*
+*.frm.[0-9]*
+*.neu.[0-9]*
+
+# Creo 的轨迹文件和运行时日志
+trail.txt*
+std.out
+std.err
+*.crc
+*.inf
+*.lst
+*.ger
+*.idx
+current_session.pro
